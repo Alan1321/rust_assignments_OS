@@ -18,8 +18,7 @@ use std::sync::{Arc, Mutex};
 struct __Process {
     id: u64,
     priority: u64,
-    sleep_time: u64,
-    description: String
+    sleep_time: u64
 }
 
 //implementing ord for process
@@ -47,77 +46,77 @@ impl PartialEq for __Process {
 impl Eq for __Process {}
 
 fn main() {
-    // Prompt the user for input
-    let n = accept_input("Enter number of processes to generate each time: ".to_string());
-    let s = accept_input("Enter sleep time in ms between generations: ".to_string());
-    let m = accept_input("Enter number of times the producer should generate processes: ".to_string());
 
-    // Create a shared binary heap that will serve as the priority queue
-    let heap = Arc::new(Mutex::new(BinaryHeap::new()));
+    let mut consumer1_count = 0;
+    let mut consumer2_count = 0;   
+    
+    let n:u64 = accept_input("Enter N (number of process nodes to generate each time)".to_string());
+    let s:u64 = accept_input("Enter S (sleep time in ms between generations)".to_string());
+    let m:u64 = accept_input("Enter M (number of times the producer should generate N nodes)".to_string());
+    
+    println!("\nStarting Simulation\n");
 
-    // Spawn the producer thread
-    let producer_heap = Arc::clone(&heap);
+    let buf_heap = Arc::new(Mutex::new(BinaryHeap::new()));
+
+    let producer = buf_heap.clone();
     let producer_thread = thread::spawn(move || {
         for _ in 0..m {
-            // Generate n processes with random priorities and add them to the heap
-            for i in 0..n {
+            println!("... producer is starting its work ...");
+            let mut i = 0;
+            while i < n{
                 let priority: u64 = rand::thread_rng().gen_range(0..100);
                 let sleep_time: u64 = rand::thread_rng().gen_range(100..2000);
-                producer_heap.lock().unwrap().push(__Process{id:i, priority:priority, sleep_time:sleep_time, description:format!("{}{}", "Process Node: ", i+1)});
+                producer.lock().unwrap().push(__Process{id:i, priority:priority, sleep_time:sleep_time});
+                i = i + 1;
             }
-            // Sleep for s milliseconds
+            println!("... producer is sleeping ...");
             thread::sleep(Duration::from_millis(s));
         }
+        println!("... producer has finished: {} nodes were generated ...", n*m);
     });
 
-    // Wait for a short delay to ensure there are nodes in the heap before consumers start
     thread::sleep(Duration::from_millis(100));
 
-    // Spawn the consumer threads
-    let consumer_heap = Arc::clone(&heap);
-    let consumer_thread1 = thread::spawn(move || {
+    let consumer1 = buf_heap.clone();
+    let consumer1_thread = thread::spawn(move || {
         loop {
-            let process_opt = consumer_heap.lock().unwrap().pop();
-            match process_opt {
-                Some(process) => {
-                    println!(
-                        "Consumer 1: Executing process {} with priority {} for 100ms",
-                        process.id, process.priority
-                    );
-                    thread::sleep(Duration::from_millis(1000));
+            let heap_data = consumer1.lock().unwrap().pop();
+            match heap_data {
+                Some(node) =>{
+                    println!("Consumer1: executed process {}, pri: {}, for {} ms", node.id, node.priority, node.sleep_time);
+                    consumer1_count  = consumer1_count + 1;
+                    thread::sleep(Duration::from_millis(node.sleep_time));
                 }
                 None => {
-                    println!("Consumer 1: No more processes to execute");
+                    println!("...Consumer1 has completed and executed {} processes", consumer1_count);
                     break;
                 }
             }
         }
     });
 
-    let consumer_heap = Arc::clone(&heap);
-    let consumer_thread2 = thread::spawn(move || {
+    let consumer2 = buf_heap.clone();
+    let consumer2_thread = thread::spawn(move || {
         loop {
-            let process_opt = consumer_heap.lock().unwrap().pop();
-            match process_opt {
-                Some(process) => {
-                    println!(
-                        "Consumer 2: Executing process {} with priority {} for 100ms",
-                        process.id, process.priority
-                    );
-                    thread::sleep(Duration::from_millis(1000));
+            let heap_data = consumer2.lock().unwrap().pop();
+            match heap_data {
+                Some(node) =>{
+                    println!("Consumer2: executed process {}, pri: {}, for {} ms", node.id, node.priority, node.sleep_time);
+                    consumer2_count = consumer2_count + 1;
+                    thread::sleep(Duration::from_millis(node.sleep_time));
                 }
                 None => {
-                    println!("Consumer 2: No more processes to execute");
+                    println!("...Consumer2 has completed and executed {} processes", consumer2_count);
                     break;
                 }
             }
         }
     });
 
-    // Wait for all threads to complete
+
     producer_thread.join().unwrap();
-    consumer_thread1.join().unwrap();
-    consumer_thread2.join().unwrap();
+    consumer1_thread.join().unwrap();
+    consumer2_thread.join().unwrap();
 }
 
 
@@ -133,10 +132,6 @@ fn accept_input(msg: String) -> u64{
         //Here we convert String to int and also do error handling for strings
         let _num: u64 = match input.trim().parse() {
             Ok(_num) => {
-                if _num < 0{
-                    println!("Invalid Input :( .Needs to be greater than 0.");
-                    continue;
-                }
                 _x = _num;
                 break;
             },
